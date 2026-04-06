@@ -38,6 +38,10 @@ app.post('/payment-callback', async (req, res) => {
   console.log("Payment callback received:", payment);
 
   // هنا تحدث قاعدة بياناتك أو رصيد المستخدم
+  // تحقق من حالة الدفع
+  if(payment.payment_status === "finished") {
+    // هنا تحديث رصيد المستخدم أو حالة الطلب في قاعدة البيانات
+    console.log('Payment successfully received:', payment);
   // payment.status يمكن أن يكون "finished" للدفع المكتمل
 
   res.status(200).send('OK');
