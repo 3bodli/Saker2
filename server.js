@@ -20,7 +20,7 @@ app.post('/create-payment', async (req, res) => {
     const response = await axios.post('https://api.nowpayments.io/v1/invoice', {
       price_amount: amount,
       price_currency: "usd",
-      pay_currency: "usdt",
+      pay_currency: "btc",
       order_id: `order_${Date.now()}`,
       ipn_callback_url: "https://saker2-production.up.railway.app/payment-callback",
       success_url: "https://google.com"
