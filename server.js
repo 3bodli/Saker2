@@ -18,6 +18,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'temp_secret';
 console.log('🚀 Server starting...');
 console.log('MONGODB_URI:', MONGODB_URI ? '✅ موجود' : '❌ غير موجود');
 console.log('NOW_API_KEY:', NOW_API_KEY ? '✅ موجود' : '❌ غير موجود');
+console.log('NOW_API_KEY value:', NOW_API_KEY ? NOW_API_KEY.substring(0, 10) + '...' : 'null');
 
 // ========== الاتصال بقاعدة البيانات ==========
 if (!MONGODB_URI) {
@@ -43,6 +44,7 @@ app.get('/', (req, res) => {
     res.json({
         status: 'online',
         mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        nowpayments: NOW_API_KEY ? 'configured' : 'missing',
         time: new Date().toISOString()
     });
 });
@@ -132,47 +134,107 @@ const verifyToken = (req, res, next) => {
     }
 };
 
-// إنشاء طلب دفع
+// ✅ إنشاء طلب دفع (نسخة مصححة)
 app.post('/create-payment', verifyToken, async (req, res) => {
-    console.log('💰 Payment request:', req.body.amount, req.body.pay_currency);
+    console.log('💰 Payment request received');
+    console.log('Body:', req.body);
+    console.log('User:', req.user.username);
     
     const { amount, pay_currency } = req.body;
     
+    // التحقق من المبلغ
     if (!amount || amount < 1) {
         return res.status(400).json({ success: false, error: 'المبلغ غير صحيح' });
     }
     
+    // التحقق من مفتاح NOWPayments
     if (!NOW_API_KEY) {
-        console.error('❌ NOW_API_KEY غير موجود');
-        return res.status(500).json({ success: false, error: 'مفتاح الدفع غير متوفر' });
+        console.error('❌ NOW_API_KEY غير موجود في متغيرات البيئة');
+        return res.status(500).json({ 
+            success: false, 
+            error: 'مفتاح الدفع غير متوفر، الرجاء التواصل مع الدعم الفني' 
+        });
     }
     
     try {
-        const response = await axios.post('https://api.nowpayments.io/v1/invoice', {
-            price_amount: parseFloat(amount),
-            price_currency: "usd",
-            pay_currency: pay_currency || "btc",
-            order_id: `order_${Date.now()}_${req.user.userId}`,
-            success_url: "https://google.com"
-        }, {
-            headers: {
-                'x-api-key': NOW_API_KEY,
-                'Content-Type': 'application/json'
+        console.log('📡 جاري الاتصال بـ NOWPayments API...');
+        console.log('API Key:', NOW_API_KEY.substring(0, 10) + '...');
+        
+        const response = await axios.post(
+            'https://api.nowpayments.io/v1/invoice',
+            {
+                price_amount: parseFloat(amount),
+                price_currency: "usd",
+                pay_currency: pay_currency || "btc",
+                order_id: `order_${Date.now()}_${req.user.userId}`,
+                ipn_callback_url: "https://saker2-production.up.railway.app/payment-callback",
+                success_url: "https://google.com",
+                cancel_url: "https://google.com"
+            },
+            {
+                headers: {
+                    'x-api-key': NOW_API_KEY,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 10000 // 10 ثواني مهلة
             }
+        );
+        
+        console.log('✅ تم إنشاء الفاتورة بنجاح');
+        console.log('URL:', response.data.invoice_url);
+        
+        res.json({ 
+            success: true, 
+            paymentUrl: response.data.invoice_url,
+            message: 'تم إنشاء رابط الدفع بنجاح'
         });
         
-        console.log('✅ تم إنشاء رابط الدفع');
-        res.json({ success: true, paymentUrl: response.data.invoice_url });
-        
     } catch (error) {
-        console.error('❌ Payment error:', error.response?.data || error.message);
-        res.status(500).json({ success: false, error: 'فشل إنشاء طلب الدفع' });
+        console.error('❌ خطأ في NOWPayments:');
+        
+        if (error.response) {
+            // الخطأ من NOWPayments
+            console.error('Status:', error.response.status);
+            console.error('Data:', error.response.data);
+            console.error('Headers:', error.response.headers);
+            
+            let errorMessage = 'فشل إنشاء طلب الدفع';
+            
+            if (error.response.status === 401) {
+                errorMessage = 'مفتاح API غير صالح، الرجاء التحقق من المفتاح';
+            } else if (error.response.status === 400) {
+                errorMessage = error.response.data.message || 'بيانات الدفع غير صحيحة';
+            } else if (error.response.status === 429) {
+                errorMessage = 'عدد الطلبات كبير جداً، حاول لاحقاً';
+            }
+            
+            res.status(error.response.status).json({ 
+                success: false, 
+                error: errorMessage,
+                details: error.response.data
+            });
+            
+        } else if (error.request) {
+            // السيرفر ما رد
+            console.error('No response from NOWPayments');
+            res.status(500).json({ 
+                success: false, 
+                error: 'لا يوجد استجابة من بوابة الدفع، حاول لاحقاً' 
+            });
+        } else {
+            // خطأ في الإعدادات
+            console.error('Error:', error.message);
+            res.status(500).json({ 
+                success: false, 
+                error: 'خطأ في إعدادات الدفع: ' + error.message 
+            });
+        }
     }
 });
 
 // Webhook
 app.post('/payment-callback', async (req, res) => {
-    console.log('📦 Webhook:', req.body);
+    console.log('📦 Webhook received:', req.body);
     res.status(200).send('OK');
 });
 
@@ -182,5 +244,10 @@ app.listen(PORT, () => {
     console.log(`\n✅ Server running on port ${PORT}`);
     console.log(`🌐 URL: https://saker2-production.up.railway.app`);
     console.log(`💾 MongoDB: ${mongoose.connection.readyState === 1 ? 'Connected ✅' : 'Disconnected ❌'}`);
-    console.log(`💰 NOWPayments: ${NOW_API_KEY ? 'Configured ✅' : 'Missing ❌'}\n`);
+    console.log(`💰 NOWPayments: ${NOW_API_KEY ? 'Configured ✅' : 'Missing ❌'}`);
+    console.log(`\n📝 Test endpoints:`);
+    console.log(`   GET  / - Check status`);
+    console.log(`   POST /api/register - Create account`);
+    console.log(`   POST /api/login - Login`);
+    console.log(`   POST /create-payment - Create payment (需要登录)\n`);
 });
