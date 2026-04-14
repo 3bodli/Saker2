@@ -48,6 +48,24 @@ app.get('/', (req, res) => {
     });
 });
 
+// ========== التحقق من صحة التوكن ==========
+app.post('/api/verify', (req, res) => {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader) {
+        return res.json({ valid: false, error: 'لا يوجد توكن' });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || '12345678');
+        res.json({ valid: true, user: decoded });
+    } catch (error) {
+        res.json({ valid: false, error: error.message });
+    }
+});
+
 // ========== تسجيل مستخدم جديد ==========
 app.post('/api/register', async (req, res) => {
     console.log('📝 محاولة تسجيل:', req.body.username);
@@ -147,7 +165,7 @@ app.post('/api/login', async (req, res) => {
         // إنشاء توكن
         const token = jwt.sign(
             { userId: user._id, username: user.username },
-            process.env.JWT_SECRET || 'my_secret_key_123',
+            process.env.JWT_SECRET || '12345678',
             { expiresIn: '7d' }
         );
         
