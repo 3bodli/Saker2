@@ -8,7 +8,7 @@ app.use(express.json());
 
 // ========== رابط Google Sheets API ==========
 // استبدل هذا الرابط بالرابط اللي حصلت عليه
-const SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbw8uf_6eVLJZLq4jKQePjzTzr4bxX_xK0DNtNSI330EeOgdLyw-HRyKAtOHEKJ87ykA7Q/exec';
+const SHEETS_API_URL = 'https://script.google.com/macros/s/AKfycbyoD1LC-eSr-SsFC6DVhZIrz8ZP_6eT-qpJNY-dn-cGkshlucCf9ofoDLyMbCd9WRySvg/exec';
 
 // تخزين مؤقت احتياطي (لو ما اشتغلت Google Sheets)
 const tempUsers = [];
