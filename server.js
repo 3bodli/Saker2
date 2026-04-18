@@ -1,164 +1,73 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ========== رابط SheetDB (استبدله برابطك) ==========
-const SHEETDB_URL = 'https://sheetdb.io/api/v1/mzqjpb6r5e2af';
+const NOW_API_KEY = process.env.NOW_API_KEY;
+const SHEETDB_URL = process.env.SHEETDB_URL;
 
-// ========== تخزين مؤقت احتياطي ==========
-const tempUsers = [];
-
-// ========== فحص السيرفر ==========
-app.get('/', (req, res) => {
-    res.json({ 
-        status: 'online', 
-        database: 'SheetDB',
-        message: 'Server is ready!'
-    });
-});
-
-// ========== تسجيل مستخدم جديد ==========
-app.post('/api/register', async (req, res) => {
-    const { username, password } = req.body;
-    console.log('📝 Register:', username);
+// إنشاء دليل فعلي
+app.post('/create-payment', async (req, res) => {
+    const { amount, pay_currency } = req.body;
     
-    if (!username || !password) {
-        return res.json({ success: false, error: 'أدخل جميع البيانات' });
+    if (!amount || amount < 1) {
+        return res.status(400).json({ success: false, error: 'المبلغ غير صحيح' });
     }
     
     try {
-        // جلب جميع المستخدمين من SheetDB
-        const getResponse = await axios.get(SHEETDB_URL);
-        const users = getResponse.data;
-        
-        // التحقق من وجود المستخدم
-        const userExists = users.some(user => user.username === username);
-        
-        if (userExists) {
-            return res.json({ success: false, error: 'اسم المستخدم موجود مسبقاً' });
-        }
-        
-        // إضافة مستخدم جديد
-        await axios.post(SHEETDB_URL, {
-            data: {
-                username: username,
-                password: password,
-                createdAt: new Date().toISOString()
+        const response = await axios.post('https://api.nowpayments.io/v1/invoice', {
+            price_amount: parseFloat(amount),
+            price_currency: "usd",
+            pay_currency: pay_currency || "btc",
+            order_id: `order_${Date.now()}`,
+            ipn_callback_url: "https://saker2-production.up.railway.app/payment-callback",
+            success_url: "https://your-website.com/success",
+            cancel_url: "https://your-website.com/cancel"
+        }, {
+            headers: {
+                'x-api-key': NOW_API_KEY,
+                'Content-Type': 'application/json'
             }
         });
         
-        console.log('✅ تم إنشاء حساب في SheetDB:', username);
-        res.json({ success: true, message: 'تم إنشاء الحساب بنجاح' });
+        // رابط الدفع الفعلي
+        const paymentUrl = response.data.invoice_url;
+        
+        res.json({ 
+            success: true, 
+            paymentUrl: paymentUrl,
+            message: 'تم إنشاء رابط الدفع بنجاح'
+        });
         
     } catch (error) {
-        console.log('⚠️ SheetDB فشل، استخدام التخزين المؤقت');
-        
-        // استخدام التخزين المؤقت كبديل
-        const userExists = tempUsers.find(u => u.username === username);
-        if (userExists) {
-            return res.json({ success: false, error: 'اسم المستخدم موجود' });
-        }
-        
-        tempUsers.push({ username, password });
-        res.json({ success: true, message: 'تم إنشاء الحساب (تخزين مؤقت)' });
+        console.error('NOWPayments Error:', error.response?.data || error.message);
+        res.status(500).json({ 
+            success: false, 
+            error: 'فشل إنشاء طلب الدفع' 
+        });
     }
 });
 
-// ========== تسجيل دخول ==========
-app.post('/api/login', async (req, res) => {
-    const { username, password } = req.body;
-    console.log('🔐 Login:', username);
+// استقبال إشعارات الدفع
+app.post('/payment-callback', async (req, res) => {
+    console.log('📦 إشعار دفع:', req.body);
     
-    if (!username || !password) {
-        return res.json({ success: false, error: 'أدخل جميع البيانات' });
-    }
+    const payment = req.body;
     
-    try {
-        // البحث عن المستخدم في SheetDB
-        const response = await axios.get(`${SHEETDB_URL}/search?username=${username}`);
-        const users = response.data;
+    if (payment.payment_status === 'finished') {
+        console.log(`✅ تم استلام الدفع بنجاح!`);
+        console.log(`💰 المبلغ: ${payment.pay_amount} ${payment.pay_currency}`);
+        console.log(`🆔 رقم العملية: ${payment.payment_id}`);
         
-        if (users.length > 0 && users[0].password === password) {
-            const token = Buffer.from(username + ':' + Date.now()).toString('base64');
-            console.log('✅ تم تسجيل دخول من SheetDB:', username);
-            
-            return res.json({
-                success: true,
-                token: token,
-                username: username,
-                message: 'تم تسجيل الدخول بنجاح'
-            });
-        }
-        
-        // البحث في التخزين المؤقت
-        const tempUser = tempUsers.find(u => u.username === username && u.password === password);
-        if (tempUser) {
-            const token = Buffer.from(username + ':' + Date.now()).toString('base64');
-            console.log('✅ تم تسجيل دخول من التخزين المؤقت:', username);
-            
-            return res.json({
-                success: true,
-                token: token,
-                username: username,
-                message: 'تم تسجيل الدخول بنجاح (تخزين مؤقت)'
-            });
-        }
-        
-        res.json({ success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
-        
-    } catch (error) {
-        console.log('⚠️ SheetDB فشل، البحث في التخزين المؤقت');
-        
-        const tempUser = tempUsers.find(u => u.username === username && u.password === password);
-        if (tempUser) {
-            const token = Buffer.from(username + ':' + Date.now()).toString('base64');
-            res.json({ success: true, token, username });
-        } else {
-            res.json({ success: false, error: 'بيانات غير صحيحة' });
-        }
-    }
-});
-
-// ========== التحقق من التوكن ==========
-const verifyToken = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-        return res.status(401).json({ success: false, error: 'غير مصرح' });
-    }
-    next();
-};
-
-// ========== إنشاء طلب دفع ==========
-app.post('/create-payment', verifyToken, (req, res) => {
-    const { amount } = req.body;
-    
-    if (!amount || amount < 1) {
-        return res.json({ success: false, error: 'المبلغ غير صحيح' });
+        // هنا تقدر تحديث حالة الطلب عندك
+        // وحفظ العملية في SheetDB
     }
     
-    res.json({ 
-        success: true, 
-        paymentUrl: `https://nowpayments.io/payment-demo?amount=${amount}` 
-    });
+    res.status(200).send('OK');
 });
 
-// ========== عرض جميع المستخدمين (للاختبار) ==========
-app.get('/api/users', async (req, res) => {
-    try {
-        const response = await axios.get(SHEETDB_URL);
-        res.json({ users: response.data });
-    } catch (error) {
-        res.json({ users: tempUsers });
-    }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`\n✅ Server running on port ${PORT}`);
-    console.log(`🌐 https://saker2-production.up.railway.app`);
-    console.log(`📡 SheetDB: ${SHEETDB_URL}\n`);
-});
+app.listen(3000, () => console.log('✅ Server running'));
