@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 // ========== إعدادات ==========
-const SHEETDB_URL = 'https://sheetdb.io/api/v1/mzqjpb6r5e2af'; // غيرها
+const SHEETDB_URL = 'https://sheetdb.io/api/v1/8efypb9mcmexn'; // غيرها
 const JWT_SECRET = '12345678';
 
 // ========== بيانات المشرف ==========
