@@ -13,12 +13,13 @@
     "axios": "^1.6.2",
     "jsonwebtoken": "^9.0.2",
     "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^9.0.0",
     "dotenv": "^16.3.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
   "keywords": ["payment", "transfer", "exchange", "money"],
-  "author": "Your Name",
+  "author": "obada",
   "license": "MIT"
 }
