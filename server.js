@@ -76,7 +76,7 @@ const companies = [
     { id: 22, name: "صافي للصرافة", image: "img22", fee: 7 },
     { id: 23, name: "الخواجا للصرافة", image: "img23", fee: 7 },
     { id: 24, name: "دهب للصرافة", image: "img24", fee: 7 },
-    { id: 25, name: "كابيتال", image: "img25", fee: 7 },
+    { id: 25, name: "كابيتال", image: "img25", fee: 8 },
     { id: 26, name: "شركة اتحاد", image: "img26", fee: 7 }
 ];
 
