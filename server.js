@@ -1,55 +1,63 @@
 const express = require('express');
 const cors = require('cors');
-const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-require('dotenv').config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ========== رابط SheetDB الصحيح ==========
-const SHEETDB_URL = 'https://sheetdb.io/api/v1/8efypb9mcmexn';
+// ========== إعدادات ==========
 const JWT_SECRET = '12345678';
+const PORT = process.env.PORT || 3000;
+
+// ========== التخزين المؤقت (كل البيانات هنا) ==========
+let users = [
+    { id: 1, username: 'admin', password: bcrypt.hashSync('admin123', 10), role: 'admin', createdAt: new Date().toISOString() }
+];
+let transfers = [];
+let nextUserId = 2;
+let nextTransferId = 1;
 
 // ========== الشركات (26 شركة) ==========
 const companies = [
-    { id: 1, name: "البريد السوري", image: "img1", fee: 7 },
-    { id: 2, name: "الهرم للحوالات", image: "img2", fee: 7 },
-    { id: 3, name: "الفؤاد للحوالات", image: "img3", fee: 7 },
+    { id: 1, name: "البريد السوري", image: "img1", fee: 5 },
+    { id: 2, name: "الهرم للحوالات", image: "img2", fee: 6 },
+    { id: 3, name: "الفؤاد للحوالات", image: "img3", fee: 5 },
     { id: 4, name: "شركة شخاشيرو", image: "img4", fee: 7 },
-    { id: 5, name: "شركة شام للحوالات", image: "img5", fee: 7 },
-    { id: 6, name: "زمزم للصرافة", image: "img6", fee: 7 },
+    { id: 5, name: "شركة شام للحوالات", image: "img5", fee: 5 },
+    { id: 6, name: "زمزم للصرافة", image: "img6", fee: 6 },
     { id: 7, name: "تايغر للصرافة", image: "img7", fee: 7 },
-    { id: 8, name: "ياقوت بلس للصرافة", image: "img8", fee: 7 },
-    { id: 9, name: "دوفيز للحوالات", image: "img9", fee: 7 },
-    { id: 10, name: "الاتحاد للحوالات", image: "img10", fee: 7 },
+    { id: 8, name: "ياقوت بلس للصرافة", image: "img8", fee: 6 },
+    { id: 9, name: "دوفيز للحوالات", image: "img9", fee: 5 },
+    { id: 10, name: "الاتحاد للحوالات", image: "img10", fee: 6 },
     { id: 11, name: "روديوم للصرافة", image: "img11", fee: 7 },
-    { id: 12, name: "شركة طيف للصرافة", image: "img12", fee: 7 },
-    { id: 13, name: "موني اوت للصرافة", image: "img13", fee: 7 },
-    { id: 14, name: "مسار للصرافة", image: "img14", fee: 7 },
-    { id: 15, name: "تيما للصرافة", image: "img15", fee: 7 },
-    { id: 16, name: "قاسيون للصرافة", image: "img16", fee: 7 },
-    { id: 17, name: "الميثاق", image: "img17", fee: 7 },
-    { id: 18, name: "الحافظ للصرافة", image: "img18", fee: 7 },
-    { id: 19, name: "الاندلس", image: "img19", fee: 7 },
-    { id: 20, name: "سوريانا", image: "img20", fee: 7 },
-    { id: 21, name: "دار الامل للصرافة", image: "img21", fee: 7 },
-    { id: 22, name: "صافي للصرافة", image: "img22", fee: 7 },
+    { id: 12, name: "شركة طيف للصرافة", image: "img12", fee: 5 },
+    { id: 13, name: "موني اوت للصرافة", image: "img13", fee: 6 },
+    { id: 14, name: "مسار للصرافة", image: "img14", fee: 5 },
+    { id: 15, name: "تيما للصرافة", image: "img15", fee: 6 },
+    { id: 16, name: "قاسيون للصرافة", image: "img16", fee: 5 },
+    { id: 17, name: "الميثاق", image: "img17", fee: 6 },
+    { id: 18, name: "الحافظ للصرافة", image: "img18", fee: 5 },
+    { id: 19, name: "الاندلس", image: "img19", fee: 6 },
+    { id: 20, name: "سوريانا", image: "img20", fee: 5 },
+    { id: 21, name: "دار الامل للصرافة", image: "img21", fee: 6 },
+    { id: 22, name: "صافي للصرافة", image: "img22", fee: 5 },
     { id: 23, name: "الخواجا للصرافة", image: "img23", fee: 7 },
-    { id: 24, name: "دهب للصرافة", image: "img24", fee: 7 },
-    { id: 25, name: "كابيتال", image: "img25", fee: 7 },
-    { id: 26, name: "شركة اتحاد", image: "img26", fee: 7 }
+    { id: 24, name: "دهب للصرافة", image: "img24", fee: 6 },
+    { id: 25, name: "كابيتال", image: "img25", fee: 5 },
+    { id: 26, name: "شركة اتحاد", image: "img26", fee: 6 }
 ];
-
-// ========== تخزين مؤقت (احتياطي) ==========
-let tempUsers = [];
-let tempTransfers = [];
 
 // ========== فحص السيرفر ==========
 app.get('/', (req, res) => {
-    res.json({ status: 'online', message: 'Server running!' });
+    res.json({ 
+        status: 'online', 
+        message: 'نظام التحويلات شغال بدون قاعدة بيانات!',
+        users: users.length,
+        transfers: transfers.length,
+        companies: companies.length
+    });
 });
 
 // ========== جلب الشركات ==========
@@ -58,115 +66,114 @@ app.get('/api/companies', (req, res) => {
 });
 
 // ========== تسجيل مستخدم جديد ==========
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', (req, res) => {
     const { username, password } = req.body;
-    console.log('📝 Register:', username);
+    console.log('📝 محاولة تسجيل:', username);
     
     if (!username || !password) {
-        return res.json({ success: false, error: 'أدخل جميع البيانات' });
+        return res.status(400).json({ success: false, error: 'الرجاء إدخال اسم المستخدم وكلمة المرور' });
     }
     
-    try {
-        // جلب المستخدمين من SheetDB
-        const response = await axios.get(`${SHEETDB_URL}/users`);
-        const users = response.data;
-        const userExists = users.find(u => u.username === username);
-        
-        if (userExists) {
-            return res.json({ success: false, error: 'اسم المستخدم موجود' });
-        }
-        
-        // إضافة مستخدم جديد
-        await axios.post(`${SHEETDB_URL}/users`, {
-            data: {
-                username: username,
-                password: password,
-                role: 'user',
-                createdAt: new Date().toISOString()
-            }
-        });
-        
-        console.log('✅ تم إنشاء حساب:', username);
-        res.json({ success: true, message: 'تم إنشاء الحساب بنجاح' });
-        
-    } catch (error) {
-        console.log('⚠️ SheetDB فشل، استخدام تخزين مؤقت');
-        
-        // تخزين مؤقت
-        if (tempUsers.find(u => u.username === username)) {
-            return res.json({ success: false, error: 'اسم المستخدم موجود' });
-        }
-        tempUsers.push({ username, password, role: 'user' });
-        res.json({ success: true, message: 'تم إنشاء الحساب (تخزين مؤقت)' });
+    if (username.length < 3) {
+        return res.status(400).json({ success: false, error: 'اسم المستخدم قصير جداً' });
     }
+    
+    if (password.length < 4) {
+        return res.status(400).json({ success: false, error: 'كلمة المرور قصيرة جداً' });
+    }
+    
+    // التحقق من وجود المستخدم
+    const userExists = users.find(u => u.username === username);
+    if (userExists) {
+        return res.status(400).json({ success: false, error: 'اسم المستخدم موجود مسبقاً' });
+    }
+    
+    // إضافة مستخدم جديد
+    const newUser = {
+        id: nextUserId++,
+        username: username,
+        password: bcrypt.hashSync(password, 10),
+        role: 'user',
+        createdAt: new Date().toISOString()
+    };
+    users.push(newUser);
+    
+    console.log('✅ تم إنشاء حساب:', username);
+    res.json({ success: true, message: 'تم إنشاء الحساب بنجاح' });
 });
 
 // ========== تسجيل دخول ==========
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-    console.log('🔐 Login:', username);
+    console.log('🔐 محاولة دخول:', username);
     
     if (!username || !password) {
-        return res.json({ success: false, error: 'أدخل جميع البيانات' });
+        return res.status(400).json({ success: false, error: 'الرجاء إدخال جميع البيانات' });
     }
     
-    // مشرف
-    if (username === 'admin' && password === 'admin123') {
-        const token = jwt.sign({ username, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
-        return res.json({ success: true, token, username, role: 'admin' });
+    // البحث عن المستخدم
+    const user = users.find(u => u.username === username);
+    
+    if (!user) {
+        return res.status(401).json({ success: false, error: 'اسم المستخدم غير صحيح' });
     }
     
-    try {
-        // البحث في SheetDB
-        const response = await axios.get(`${SHEETDB_URL}/users`);
-        const users = response.data;
-        const user = users.find(u => u.username === username && u.password === password);
-        
-        if (user) {
-            const token = jwt.sign({ username, role: user.role || 'user' }, JWT_SECRET, { expiresIn: '7d' });
-            console.log('✅ تم تسجيل دخول:', username);
-            return res.json({ success: true, token, username, role: user.role || 'user' });
-        }
-        
-        // البحث في التخزين المؤقت
-        const tempUser = tempUsers.find(u => u.username === username && u.password === password);
-        if (tempUser) {
-            const token = jwt.sign({ username, role: 'user' }, JWT_SECRET, { expiresIn: '7d' });
-            return res.json({ success: true, token, username, role: 'user' });
-        }
-        
-        res.json({ success: false, error: 'بيانات غير صحيحة' });
-        
-    } catch (error) {
-        console.error('❌ خطأ:', error.message);
-        res.json({ success: false, error: 'خطأ في الخادم' });
+    // التحقق من كلمة المرور
+    const isValid = bcrypt.compareSync(password, user.password);
+    if (!isValid) {
+        return res.status(401).json({ success: false, error: 'كلمة المرور غير صحيحة' });
     }
+    
+    // إنشاء توكن
+    const token = jwt.sign(
+        { id: user.id, username: user.username, role: user.role },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+    );
+    
+    console.log('✅ تم تسجيل دخول:', username);
+    res.json({
+        success: true,
+        token: token,
+        username: user.username,
+        role: user.role,
+        message: 'تم تسجيل الدخول بنجاح'
+    });
 });
 
 // ========== التحقق من التوكن ==========
 const verifyToken = (req, res, next) => {
     const authHeader = req.headers.authorization;
+    
     if (!authHeader) {
-        return res.status(401).json({ success: false, error: 'غير مصرح' });
+        return res.status(401).json({ success: false, error: 'غير مصرح به - لا يوجد توكن' });
     }
     
+    const token = authHeader.split(' ')[1];
+    
     try {
-        const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded;
         next();
     } catch (error) {
-        res.status(401).json({ success: false, error: 'توكن غير صالح' });
+        return res.status(401).json({ success: false, error: 'توكن غير صالح أو منتهي الصلاحية' });
     }
 };
 
-// ========== إنشاء طلب تحويل لي ==========
+// ========== إنشاء طلب تحويل (تحويل لي) ==========
 app.post('/api/create-transfer', verifyToken, (req, res) => {
     const { senderName, note, amount } = req.body;
-    const finalAmount = amount * 0.93;
+    const feePercent = 7;
+    const finalAmount = amount * (1 - feePercent / 100);
+    
+    console.log('💰 طلب تحويل لي من:', req.user.username, 'المبلغ:', amount);
+    
+    if (!senderName || !amount || amount < 1) {
+        return res.status(400).json({ success: false, error: 'الرجاء إدخال جميع البيانات بشكل صحيح' });
+    }
     
     const transfer = {
-        id: Date.now().toString(),
+        id: nextTransferId++,
         type: 'to_me',
         senderName,
         note: note || '',
@@ -177,19 +184,34 @@ app.post('/api/create-transfer', verifyToken, (req, res) => {
         userId: req.user.username
     };
     
-    tempTransfers.push(transfer);
-    res.json({ success: true, transferId: transfer.id, finalAmount: transfer.finalAmount });
+    transfers.push(transfer);
+    console.log('✅ تم إنشاء طلب تحويل:', transfer.id);
+    
+    res.json({
+        success: true,
+        transferId: transfer.id,
+        finalAmount: transfer.finalAmount,
+        message: 'تم إنشاء طلب التحويل بنجاح'
+    });
 });
 
 // ========== إنشاء طلب تحويل لشركة ==========
 app.post('/api/create-company-transfer', verifyToken, (req, res) => {
     const { companyName, receiverName, receiverNumber, amount } = req.body;
+    
+    console.log('💰 طلب تحويل لشركة من:', req.user.username, 'الشركة:', companyName, 'المبلغ:', amount);
+    
+    if (!companyName || !receiverName || !receiverNumber || !amount || amount < 1) {
+        return res.status(400).json({ success: false, error: 'الرجاء إدخال جميع البيانات بشكل صحيح' });
+    }
+    
+    // البحث عن نسبة رسوم الشركة
     const company = companies.find(c => c.name === companyName);
     const feePercent = company ? company.fee : 5;
     const finalAmount = amount * (1 - feePercent / 100);
     
     const transfer = {
-        id: Date.now().toString(),
+        id: nextTransferId++,
         type: 'to_company',
         companyName,
         receiverName,
@@ -201,48 +223,118 @@ app.post('/api/create-company-transfer', verifyToken, (req, res) => {
         userId: req.user.username
     };
     
-    tempTransfers.push(transfer);
-    res.json({ success: true, transferId: transfer.id, finalAmount: transfer.finalAmount });
+    transfers.push(transfer);
+    console.log('✅ تم إنشاء طلب تحويل شركة:', transfer.id);
+    
+    res.json({
+        success: true,
+        transferId: transfer.id,
+        finalAmount: transfer.finalAmount,
+        message: 'تم إنشاء طلب التحويل بنجاح'
+    });
 });
 
-// ========== جلب الطلبات للمشرف ==========
+// ========== جلب جميع الطلبات (للمشرف فقط) ==========
 app.get('/api/admin/transfers', verifyToken, (req, res) => {
     if (req.user.role !== 'admin') {
-        return res.status(403).json({ success: false, error: 'غير مصرح' });
+        return res.status(403).json({ success: false, error: 'غير مصرح به - هذه الصفحة للمشرف فقط' });
     }
-    const transfers = [...tempTransfers].reverse();
-    res.json({ success: true, transfers });
+    
+    // ترتيب الطلبات من الأحدث إلى الأقدم
+    const sortedTransfers = [...transfers].reverse();
+    res.json({ success: true, transfers: sortedTransfers });
 });
 
-// ========== تحديث حالة الطلب ==========
+// ========== تحديث حالة الطلب (قبول/رفض) ==========
 app.put('/api/admin/update-transfer/:id', verifyToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'غير مصرح به' });
+    }
+    
+    const transferId = parseInt(req.params.id);
+    const { status } = req.body;
+    
+    if (!['accepted', 'rejected'].includes(status)) {
+        return res.status(400).json({ success: false, error: 'حالة غير صالحة' });
+    }
+    
+    const transfer = transfers.find(t => t.id === transferId);
+    if (!transfer) {
+        return res.status(404).json({ success: false, error: 'الطلب غير موجود' });
+    }
+    
+    transfer.status = status;
+    console.log('✅ تم تحديث حالة الطلب:', transferId, '->', status);
+    
+    res.json({
+        success: true,
+        message: `تم ${status === 'accepted' ? 'قبول' : 'رفض'} الطلب بنجاح`
+    });
+});
+
+// ========== إحصائيات سريعة (للمشرف) ==========
+app.get('/api/admin/stats', verifyToken, (req, res) => {
     if (req.user.role !== 'admin') {
         return res.status(403).json({ success: false, error: 'غير مصرح' });
     }
     
-    const transfer = tempTransfers.find(t => t.id === req.params.id);
-    if (transfer) {
-        transfer.status = req.body.status;
-        res.json({ success: true, message: `تم ${req.body.status === 'accepted' ? 'قبول' : 'رفض'} الطلب` });
-    } else {
-        res.status(404).json({ success: false, error: 'الطلب غير موجود' });
-    }
+    const stats = {
+        total: transfers.length,
+        pending: transfers.filter(t => t.status === 'pending').length,
+        accepted: transfers.filter(t => t.status === 'accepted').length,
+        rejected: transfers.filter(t => t.status === 'rejected').length,
+        totalAmount: transfers.reduce((sum, t) => sum + t.amount, 0),
+        totalFinalAmount: transfers.reduce((sum, t) => sum + t.finalAmount, 0)
+    };
+    
+    res.json({ success: true, stats });
 });
 
-// ========== إنشاء رابط دفع ==========
+// ========== إنشاء رابط دفع (بوابة NOWPayments) ==========
 app.post('/api/create-payment', verifyToken, (req, res) => {
     const { amount } = req.body;
-    res.json({ 
-        success: true, 
-        paymentUrl: `https://nowpayments.io/payment-demo?amount=${amount}` 
+    
+    console.log('💳 طلب إنشاء رابط دفع للمستخدم:', req.user.username, 'المبلغ:', amount);
+    
+    if (!amount || amount < 1) {
+        return res.status(400).json({ success: false, error: 'المبلغ غير صحيح' });
+    }
+    
+    // رابط تجريبي للدفع (يمكن استبداله بـ NOWPayments الحقيقي لاحقاً)
+    const paymentUrl = `https://nowpayments.io/payment-demo?amount=${amount}&currency=USD`;
+    
+    res.json({
+        success: true,
+        paymentUrl: paymentUrl,
+        message: 'تم إنشاء رابط الدفع بنجاح'
     });
 });
 
-// ========== تشغيل السيرفر ==========
-const PORT = process.env.PORT || 3000;
+// ========== عرض جميع المستخدمين (للمشرف) ==========
+app.get('/api/admin/users', verifyToken, (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'غير مصرح' });
+    }
+    
+    const safeUsers = users.map(u => ({
+        id: u.id,
+        username: u.username,
+        role: u.role,
+        createdAt: u.createdAt
+    }));
+    
+    res.json({ success: true, users: safeUsers });
+});
+
+// ========== بدء تشغيل السيرفر ==========
 app.listen(PORT, () => {
-    console.log(`\n✅ Server running on port ${PORT}`);
-    console.log(`🌐 https://saker2-production.up.railway.app`);
-    console.log(`👑 Admin: admin / admin123`);
-    console.log(`📊 26 شركة صرافة جاهزة!\n`);
+    console.log('\n========================================');
+    console.log('🚀 نظام التحويلات المالية شغال!');
+    console.log('========================================');
+    console.log(`📡 السيرفر على المنفذ: ${PORT}`);
+    console.log(`🌐 الرابط: https://saker2-production.up.railway.app`);
+    console.log(`💾 قاعدة البيانات: تخزين مؤقت في الذاكرة ✅`);
+    console.log(`👑 المشرف: admin / admin123`);
+    console.log(`📊 عدد الشركات: ${companies.length} شركة`);
+    console.log('========================================\n');
 });
